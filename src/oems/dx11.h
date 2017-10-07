@@ -192,4 +192,8 @@ inline bool operator!=(nullptr_t, const com_ptr<T>& com_ptr) noexcept
 	return com_ptr.ptr != nullptr;
 }
 
+// Creates a standard buffer resource.
+com_ptr<ID3D11Buffer> make_buffer(ID3D11Device* p_device, UINT byte_count,
+	D3D11_USAGE usage, UINT bing_flags, UINT cpu_access_flags = 0);
+
 } // namespace oems

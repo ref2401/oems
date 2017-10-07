@@ -120,8 +120,9 @@ namespace oems {
 
 dx11_rhi::dx11_rhi()
 {
-	p_hwnd_ = make_window({ 60, 60 }, { 128, 128 });
+	p_hwnd_ = make_window({ 100, 100 }, { 128, 128 });
 	init_dx11_stuff(p_hwnd_, p_device_.ptr, p_ctx_.ptr, p_debug_.ptr);
+
 }
 
 dx11_rhi::~dx11_rhi() noexcept
@@ -160,6 +161,27 @@ hlsl_compute::hlsl_compute(ID3D11Device* p_device, const char* p_source_filename
 		const std::string exc_msg = EXCEPTION_MSG("Compute shader creation error.");
 		std::throw_with_nested(std::runtime_error(exc_msg));
 	}
+}
+
+// ----- funcs -----
+
+com_ptr<ID3D11Buffer> make_buffer(ID3D11Device* p_device, UINT byte_count,
+	D3D11_USAGE usage, UINT bing_flags, UINT cpu_access_flags)
+{
+	assert(p_device);
+	assert(byte_count > 0);
+
+	D3D11_BUFFER_DESC desc = {};
+	desc.ByteWidth		= byte_count;
+	desc.Usage			= usage;
+	desc.BindFlags		= bing_flags;
+	desc.CPUAccessFlags = cpu_access_flags;
+
+	com_ptr<ID3D11Buffer> buffer;
+	const HRESULT hr = p_device->CreateBuffer(&desc, nullptr, &buffer.ptr);
+	assert(hr == S_OK);
+
+	return buffer;
 }
 
 } // namespace oems
