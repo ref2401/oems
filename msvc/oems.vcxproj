@@ -19,12 +19,15 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\src\oems\common.cpp" />
     <ClCompile Include="..\src\oems\dx11.cpp" />
     <ClCompile Include="..\src\oems\main.cpp" />
+    <ClCompile Include="..\src\oems\oems_sorter.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\oems\common.h" />
     <ClInclude Include="..\src\oems\dx11.h" />
+    <ClInclude Include="..\src\oems\oems_sorter.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>

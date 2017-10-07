@@ -28,13 +28,41 @@ void init_dx11_stuff(HWND p_hwnd, ID3D11Device*& p_out_device,
 		&p_out_ctx);
 
 	assert(hr == S_OK);
-	assert(actual_feature_level == expected_feature_level);
+	ENFORCE(actual_feature_level == expected_feature_level, 
+		"Failed to create a device with feature level: D3D_FEATURE_LEVEL_11_0.");
 
 	// init debug interface ---
 #ifdef OEMS_DEBUG
 	hr = p_out_device->QueryInterface<ID3D11Debug>(&p_out_debug);
 	assert(hr == S_OK);
 #endif
+}
+
+com_ptr<ID3DBlob> compile_shader(const std::string& source_code, const char* p_source_filename)
+{
+	com_ptr<ID3DBlob> p_bytecode;
+	com_ptr<ID3DBlob> p_error_blob;
+
+	HRESULT hr = D3DCompile(
+		source_code.c_str(),
+		source_code.size(),
+		p_source_filename,
+		nullptr,							// defines
+		D3D_COMPILE_STANDARD_FILE_INCLUDE,	// includes
+		"cs_main",
+		"cs_5_0",
+		0,									// compile flags
+		0,									// effect compilation flags
+		&p_bytecode.ptr,
+		&p_error_blob.ptr
+	);
+
+	if (hr != S_OK) {
+		std::string error(static_cast<char*>(p_error_blob->GetBufferPointer()), p_error_blob->GetBufferSize());
+		throw std::runtime_error(error);
+	}
+
+	return p_bytecode;
 }
 
 HWND make_window(uint2 position, uint2 client_area_size)
@@ -107,6 +135,31 @@ dx11_rhi::~dx11_rhi() noexcept
 	p_hwnd_ = nullptr;
 
 	UnregisterClass(c_window_class_name, GetModuleHandle(nullptr));
+}
+
+// ----- hlsl_compute ----
+
+hlsl_compute::hlsl_compute(ID3D11Device* p_device, const char* p_source_filename)
+{
+	assert(p_device);
+	assert(p_source_filename);
+
+	try {
+		const std::string source_code = read_text(p_source_filename);
+		ENFORCE(source_code.length() > 0, "Compute shader source file is empty. ", p_source_filename);
+
+		p_bytecode = compile_shader(source_code, p_source_filename);
+
+		const HRESULT hr = p_device->CreateComputeShader(
+			p_bytecode->GetBufferPointer(), p_bytecode->GetBufferSize(),
+			nullptr, &p_shader.ptr);
+
+		ENFORCE(hr == S_OK, std::to_string(hr));
+	}
+	catch (...) {
+		const std::string exc_msg = EXCEPTION_MSG("Compute shader creation error.");
+		std::throw_with_nested(std::runtime_error(exc_msg));
+	}
 }
 
 } // namespace oems

@@ -141,6 +141,20 @@ private:
 	com_ptr<ID3D11Debug>			p_debug_;
 };
 
+struct hlsl_compute final {
+
+	hlsl_compute() noexcept = default;
+
+	hlsl_compute(ID3D11Device* p_device, const char* p_source_filename);
+
+	hlsl_compute(hlsl_compute&& s) noexcept = default;
+	hlsl_compute& operator=(hlsl_compute&& s) noexcept = default;
+
+
+	com_ptr<ID3D11ComputeShader>	p_shader;
+	com_ptr<ID3DBlob>				p_bytecode;
+};
+
 
 template<typename T>
 inline bool operator==(const com_ptr<T>& l, const com_ptr<T>& r) noexcept
