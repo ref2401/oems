@@ -1,0 +1,181 @@
+#pragma once
+
+#include <type_traits>
+#include <oems/common.h>
+#include <d3d11.h>
+#include <d3dcommon.h>
+#include <d3dcompiler.h>
+#include <dxgi.h>
+#include <windows.h>
+
+
+namespace oems {
+
+// com_ptr is a smart pointer that owns and manages a COM object through a pointer 
+// and disposes of that object when the com_ptr goes out of scope.
+template<typename T>
+struct com_ptr final {
+
+	static_assert(std::is_base_of<IUnknown, T>::value, "T must be derived from IUnknown.");
+
+
+	com_ptr() noexcept = default;
+
+	explicit com_ptr(T* ptr) noexcept
+		: ptr(ptr)
+	{}
+
+	com_ptr(nullptr_t) noexcept {}
+
+	com_ptr(com_ptr&& com_ptr) noexcept
+		: ptr(com_ptr.ptr)
+	{
+		com_ptr.ptr = nullptr;
+	}
+
+	com_ptr& operator=(com_ptr&& com_ptr) noexcept
+	{
+		if (this == &com_ptr) return *this;
+
+		dispose();
+		ptr = com_ptr.ptr;
+		com_ptr.ptr = nullptr;
+		return *this;
+	}
+
+	~com_ptr() noexcept
+	{
+		dispose();
+	}
+
+
+	com_ptr& operator=(T* ptr) noexcept
+	{
+		dispose();
+		this->ptr = ptr;
+		return *this;
+	}
+
+	com_ptr& operator=(nullptr_t) noexcept
+	{
+		dispose();
+		return *this;
+	}
+
+	T& operator*() const noexcept
+	{
+		return *ptr;
+	}
+
+	T* operator->() const noexcept
+	{
+		return ptr;
+	}
+
+	operator bool() const noexcept
+	{
+		return (ptr != nullptr);
+	}
+
+	operator T*() const noexcept
+	{
+		return ptr;
+	}
+
+
+	// Releases the managed COM object if such is present.
+	void dispose() noexcept
+	{
+		T* temp = ptr;
+		if (temp == nullptr) return;
+
+		ptr = nullptr;
+		temp->Release();
+	}
+
+	// Releases the ownership of the managed COM object and returns a pointer to it.
+	// Does not call ptr->Release(). ptr == nullptr after that. 
+	T* release_ownership() noexcept
+	{
+		T* tmp = ptr;
+		ptr = nullptr;
+		return tmp;
+	}
+
+	// Pointer to the managed COM object.
+	T* ptr = nullptr;
+};
+
+class dx11_rhi final {
+public:
+
+	dx11_rhi();
+
+	dx11_rhi(dx11_rhi&&) = delete;
+	dx11_rhi& operator=(dx11_rhi&&) = delete;
+
+	~dx11_rhi() noexcept;
+
+
+	ID3D11Device* p_device() noexcept
+	{
+		return p_device_;
+	}
+
+	ID3D11DeviceContext* p_ctx() noexcept
+	{
+		return p_ctx_;
+	}
+
+	ID3D11Debug* p_debug() noexcept
+	{
+		return p_debug_;
+	}
+
+
+private:
+
+	HWND							p_hwnd_;
+	com_ptr<ID3D11Device>			p_device_;
+	com_ptr<ID3D11DeviceContext>	p_ctx_;
+	com_ptr<ID3D11Debug>			p_debug_;
+};
+
+
+template<typename T>
+inline bool operator==(const com_ptr<T>& l, const com_ptr<T>& r) noexcept
+{
+	return l.ptr == r.ptr;
+}
+
+template<typename T>
+inline bool operator==(const com_ptr<T>& com_ptr, nullptr_t) noexcept
+{
+	return com_ptr.ptr == nullptr;
+}
+
+template<typename T>
+inline bool operator==(nullptr_t, const com_ptr<T>& com_ptr) noexcept
+{
+	return com_ptr.ptr == nullptr;
+}
+
+template<typename T>
+inline bool operator!=(const com_ptr<T>& l, const com_ptr<T>& r) noexcept
+{
+	return l.ptr != r.ptr;
+}
+
+template<typename T>
+inline bool operator!=(const com_ptr<T>& com_ptr, nullptr_t) noexcept
+{
+	return com_ptr.ptr != nullptr;
+}
+
+template<typename T>
+inline bool operator!=(nullptr_t, const com_ptr<T>& com_ptr) noexcept
+{
+	return com_ptr.ptr != nullptr;
+}
+
+} // namespace oems
