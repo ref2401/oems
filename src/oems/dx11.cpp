@@ -108,7 +108,16 @@ HWND make_window(uint2 position, uint2 client_area_size)
 
 LRESULT CALLBACK window_proc(HWND p_hwnd, UINT message, WPARAM w_param, LPARAM l_param)
 {
-	return DefWindowProc(p_hwnd, message, w_param, l_param);
+	switch (message) {
+		default:
+			return DefWindowProc(p_hwnd, message, w_param, l_param);
+
+		case WM_DESTROY:
+		{
+			PostQuitMessage(0);
+			return 0;
+		}
+	}
 }
 
 } // namespace
@@ -120,9 +129,36 @@ namespace oems {
 
 dx11_rhi::dx11_rhi()
 {
-	p_hwnd_ = make_window({ 100, 100 }, { 128, 128 });
+	p_hwnd_ = make_window({ 100, 100 }, { 256, 256 });
 	init_dx11_stuff(p_hwnd_, p_device_.ptr, p_ctx_.ptr, p_debug_.ptr);
 
+	ShowWindow(p_hwnd_, SW_SHOW);
+	SetForegroundWindow(p_hwnd_);
+	SetFocus(p_hwnd_);
+
+	IDXGIFactory* p_factory;
+	HRESULT hr = CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)(&p_factory));
+	assert(hr == S_OK);
+
+	DXGI_SWAP_CHAIN_DESC swap_chain_desc = {};
+	swap_chain_desc.BufferCount = 2;
+	swap_chain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+	swap_chain_desc.BufferDesc.Width = 256;
+	swap_chain_desc.BufferDesc.Height = 256;
+	swap_chain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	swap_chain_desc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+	swap_chain_desc.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+	swap_chain_desc.BufferDesc.RefreshRate.Numerator = 60;
+	swap_chain_desc.BufferDesc.RefreshRate.Denominator = 1;
+	swap_chain_desc.SampleDesc.Count = 1;
+	swap_chain_desc.SampleDesc.Quality = 0;
+	swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+	swap_chain_desc.Windowed = true;
+	swap_chain_desc.OutputWindow = p_hwnd_;
+	hr = p_factory->CreateSwapChain(p_device_, &swap_chain_desc, &p_swap_chain_.ptr);
+	assert(hr == S_OK);
+
+	p_factory->Release();
 }
 
 dx11_rhi::~dx11_rhi() noexcept

@@ -132,6 +132,10 @@ public:
 		return p_debug_;
 	}
 
+	IDXGISwapChain* p_swap_chain() noexcept
+	{
+		return p_swap_chain_;
+	}
 
 private:
 
@@ -139,6 +143,7 @@ private:
 	com_ptr<ID3D11Device>			p_device_;
 	com_ptr<ID3D11DeviceContext>	p_ctx_;
 	com_ptr<ID3D11Debug>			p_debug_;
+	com_ptr<IDXGISwapChain>			p_swap_chain_;
 };
 
 struct hlsl_compute final {
