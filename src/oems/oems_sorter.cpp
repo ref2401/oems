@@ -15,6 +15,7 @@ oems_sorter::oems_sorter(ID3D11Device* p_device, ID3D11DeviceContext* p_ctx, ID3
 	assert(p_debug); // p_debug == nullptr in Release mode.
 
 	oems_base_4_shader_ = hlsl_compute(p_device, "../../data/oems_base_4.compute.hlsl");
+	oems_main_shader_ = hlsl_compute(p_device, "../../data/oems_main.compute.hlsl");
 	p_oems_4_constant_buffer_ = make_buffer(p_device, sizeof(UINT) * 4, 
 		D3D11_USAGE_DEFAULT, D3D11_BIND_CONSTANT_BUFFER);
 }
@@ -95,7 +96,7 @@ void oems_sorter::put_list_to_gpu(const float* p_list, size_t byte_count)
 
 void oems_sorter::sort(std::vector<float>& list)
 {
-	assert(list.size() > 32);
+	assert(list.size() > 4);
 
 	const size_t byte_count = sizeof(float) * list.size();
 

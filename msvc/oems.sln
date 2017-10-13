@@ -7,7 +7,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "oems", "oems.vcxproj", "{6F
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "hlsl", "hlsl", "{8FB85EA6-CBAB-4CE2-8983-EB8542522B40}"
 	ProjectSection(SolutionItems) = preProject
-		..\data\common.hlsl = ..\data\common.hlsl
 		..\data\oems_base_4.compute.hlsl = ..\data\oems_base_4.compute.hlsl
 		..\data\oems_main.compute.hlsl = ..\data\oems_main.compute.hlsl
 	EndProjectSection

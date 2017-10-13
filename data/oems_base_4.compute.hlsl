@@ -1,5 +1,3 @@
-#include "common.hlsl"
-
 static const uint c_thread_count = 32;
 
 
@@ -9,6 +7,15 @@ cbuffer constant_buffer : register(b0) {
 
 RWBuffer<float> g_buffer : register(u0);
 
+
+inline void compare_and_swap(inout float l, inout float r)
+{
+	if (l <= r) return;
+
+	const float tmp = l;
+	l = r;
+	r = tmp;
+}
 
 void sort_merge_block_4(uint origin)
 {
