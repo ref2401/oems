@@ -1,10 +1,6 @@
 static const uint c_thread_count = 32;
 
 
-cbuffer constant_buffer : register(b0) {
-	uint g_item_count : packoffset(c0);
-};
-
 RWBuffer<float> g_buffer : register(u0);
 
 
@@ -44,12 +40,19 @@ void sort_merge_block_4(uint origin)
 }
 
 [numthreads(c_thread_count, 1, 1)]
-void cs_main(uint id : SV_GroupIndex)
+void cs_main(uint id : SV_GroupThreadID)
 {
-	const uint chunk_size = g_item_count / c_thread_count;
-	const uint origin = id * chunk_size;
+	uint item_count;
+	g_buffer.GetDimensions(item_count);
 
-	for (uint i = 0; i < chunk_size; i += 4) {
-		sort_merge_block_4(origin + i);
+	const uint tuple_count = item_count >> 2; // 4 elements represent a single tuple
+	if (id >= tuple_count) return;
+
+	const uint tuples_per_thread = max(1, tuple_count / c_thread_count);
+	const uint origin = 4 * id * tuples_per_thread;
+
+	for (uint t = 0; t < tuples_per_thread; ++t) {
+		const uint first = origin + 4 * t;
+		sort_merge_block_4(first);
 	}
 }

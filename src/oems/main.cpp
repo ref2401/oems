@@ -27,8 +27,13 @@ void main()
 		oems::oems_sorter	sorter(dx11.p_device(), dx11.p_ctx(), dx11.p_debug());
 
 		// gen data & sort ---
-		std::vector<float> data = generate_test_data(1024);
+		std::vector<float> data = generate_test_data(16);
 		//sorter.sort(data);
+
+		//dx11.p_swap_chain()->Present(1, 0);
+		sorter.sort(data);
+		dx11.p_swap_chain()->Present(1, 0);
+		dx11.p_swap_chain()->Present(1, 0);
 
 		//while (true) {
 		//	bool exit = false;
@@ -43,8 +48,8 @@ void main()
 		//		DispatchMessageA(&msg);
 		//	}
 		//	if (exit) break;
-			sorter.sort(data);
-			dx11.p_swap_chain()->Present(1, 0);
+		//	sorter.sort(data);
+		//	dx11.p_swap_chain()->Present(1, 0);
 		//}
 	}
 	catch (const std::exception& e) {

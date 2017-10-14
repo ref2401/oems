@@ -1,6 +1,121 @@
 #include "oems/oems_sorter.h"
 
 #include <cassert>
+#include <iostream>
+#include <comdef.h>
+
+namespace {
+
+struct sorting_network_column {
+	UINT block_count;
+	UINT comparisons_per_block;
+	UINT origin;
+	UINT origin_step;
+	UINT right_offset;
+};
+
+
+// copies c into p_desc and advances the pointer by 1 structure futher.
+inline void append_column(sorting_network_column*& p_dest, const sorting_network_column& c)
+{
+	static constexpr size_t bc = sizeof(sorting_network_column);
+
+	std::memcpy(p_dest, &c, bc);
+	++p_dest;
+}
+
+inline UINT compute_sorting_network_column_count(UINT item_count)
+{
+	assert(item_count >= 8);
+
+	// Observation:
+	// item_count		column_count	formula
+	// 8				5				item_count - 3
+	// 16				14				item_count - 2
+	// 32				31				item_count - 1
+	// 64				64				item_count
+	// 128				129				item_count + 1
+	// 256				258				item_count + 2
+	// 512				512				item_count + 3
+	// 1024				1028			item_count + 4
+	// ...
+	// column_count = item_count + log2(item_count / 64);
+
+
+	const double term = std::log2(item_count / 64.0);
+	const double res_d = double(item_count) + term;
+	const UINT res = UINT(res_d);
+
+	assert(res_d == double(res));
+
+	return res;
+}
+
+void generate_sorting_network_columns(UINT item_count, sorting_network_column* p_out_column)
+{
+	UINT power = 3;
+	UINT tip = 8; // == 2 ^ power
+
+	while (tip <= item_count) {
+
+		const UINT block_count = item_count / tip;
+
+		// first pass ---
+		{
+			sorting_network_column column;
+			column.block_count				= block_count;
+			column.comparisons_per_block	= tip >> 2;
+			column.origin					= 0;
+			column.origin_step				= tip;
+			column.right_offset				= tip >> 1;
+
+			append_column(p_out_column, column); // even
+			column.origin += 1;
+			append_column(p_out_column, column); // odd
+		}
+
+		// second pass ---
+		for (UINT b = 0; b < block_count; ++b) {
+			const UINT column_count = power - 2;
+			UINT row_count = 0;
+			UINT row_offset = tip >> 1;
+
+			for (UINT col = 0; col < column_count; ++col) {
+				row_count = 2 * row_count + 1;
+				row_offset >>= 1;
+
+				sorting_network_column column;
+				column.block_count				= row_count;
+				column.comparisons_per_block	= row_offset >> 1;
+				column.origin					= b * tip + row_offset;
+				column.origin_step				= 2 * row_offset;
+				column.right_offset				= row_offset;
+
+				append_column(p_out_column, column); // even
+				column.origin += 1;
+				append_column(p_out_column, column); // odd
+			}
+		}
+
+		// third pass ---
+		{
+			sorting_network_column column;
+			column.block_count				= block_count;
+			column.comparisons_per_block	= (tip >> 1) - 1;
+			column.origin					= 1;
+			column.origin_step				= tip;
+			column.right_offset				= 1;
+
+			//---oems3_split_batch(batch, c_split_factor, false);
+			append_column(p_out_column, column);
+		}
+
+		tip <<= 1;
+		++power;
+	}
+}
+
+} // namespace
 
 
 namespace oems {
@@ -16,8 +131,6 @@ oems_sorter::oems_sorter(ID3D11Device* p_device, ID3D11DeviceContext* p_ctx, ID3
 
 	oems_base_4_shader_ = hlsl_compute(p_device, "../../data/oems_base_4.compute.hlsl");
 	oems_main_shader_ = hlsl_compute(p_device, "../../data/oems_main.compute.hlsl");
-	p_oems_4_constant_buffer_ = make_buffer(p_device, sizeof(UINT) * 4, 
-		D3D11_USAGE_DEFAULT, D3D11_BIND_CONSTANT_BUFFER);
 }
 
 void oems_sorter::get_list_from_gpu(float* p_list, size_t byte_count)
@@ -31,6 +144,15 @@ void oems_sorter::get_list_from_gpu(float* p_list, size_t byte_count)
 	// fill p_list using staging buffer ---
 	D3D11_MAPPED_SUBRESOURCE map;
 	HRESULT hr = p_ctx_->Map(p_buffer_staging_, 0, D3D11_MAP_READ, 0, &map);
+	if (hr != S_OK) {
+		_com_error err(hr);
+		LPCTSTR errMsg = err.ErrorMessage();
+		std::cout << errMsg << std::endl;
+
+		_com_error reason(p_device_->GetDeviceRemovedReason());
+		LPCTSTR reason_msg = reason.ErrorMessage();
+		std::cout << reason_msg << std::endl;
+	}
 	assert(hr == S_OK);
 	std::memcpy(p_list, map.pData, byte_count);
 	p_ctx_->Unmap(p_buffer_staging_, 0);
@@ -40,15 +162,9 @@ void oems_sorter::perform_oems_base_4_sort(UINT item_count)
 {
 	assert(item_count > 0);
 
-	// update constant buffer ---
-	UINT data[4] = { item_count, 0, 0, 0 };
-	p_ctx_->UpdateSubresource(p_oems_4_constant_buffer_, 0, nullptr, data, 0, 0);
-
-	// setup compute pipeline ---
+	// setup compute pipeline & dispatch work ---
 	p_ctx_->CSSetShader(oems_base_4_shader_.p_shader, nullptr, 0);
-	p_ctx_->CSSetConstantBuffers(0, 1, &p_oems_4_constant_buffer_.ptr);
 
-	// dispatch work ---
 #ifdef OEMS_DEBUG
 	HRESULT hr = p_debug_->ValidateContextForDispatch(p_ctx_);
 	assert(hr == S_OK);
@@ -56,9 +172,43 @@ void oems_sorter::perform_oems_base_4_sort(UINT item_count)
 	p_ctx_->Dispatch(1, 1, 1);
 }
 
-void oems_sorter::perform_oems_main_sort()
+void oems_sorter::perform_oems_main_sort(UINT item_count)
 {
+	assert(item_count >= 8);
 
+	// sorting network columns buffer ---
+	const UINT column_count = compute_sorting_network_column_count(item_count);
+	
+	com_ptr<ID3D11Buffer> p_buffer_columns = make_structured_buffer(p_device_, column_count,
+		sizeof(sorting_network_column), D3D11_USAGE_DYNAMIC, D3D11_BIND_SHADER_RESOURCE,
+		D3D11_CPU_ACCESS_WRITE);
+
+	com_ptr<ID3D11ShaderResourceView> p_buffer_columns_srv;
+	HRESULT hr = p_device_->CreateShaderResourceView(p_buffer_columns, nullptr, &p_buffer_columns_srv.ptr);
+	assert(hr == S_OK);
+
+	// generate sorting network and fill the buffer with it ---
+	D3D11_MAPPED_SUBRESOURCE map;
+	hr = p_ctx_->Map(p_buffer_columns, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+	assert(hr == S_OK);
+
+	sorting_network_column* p_column = reinterpret_cast<sorting_network_column*>(map.pData);
+	generate_sorting_network_columns(item_count, p_column);
+
+	p_ctx_->Unmap(p_buffer_columns, 0);
+
+	// setup compute pipeline & dispatch work ---
+	p_ctx_->CSSetShader(oems_main_shader_.p_shader, nullptr, 0);
+	p_ctx_->CSSetShaderResources(0, 1, &p_buffer_columns_srv.ptr);
+
+#ifdef OEMS_DEBUG
+	hr = p_debug_->ValidateContextForDispatch(p_ctx_);
+	assert(hr == S_OK);
+#endif
+
+	for (UINT i = 0; i < column_count; ++i) {
+		p_ctx_->Dispatch(i, 1, 1);
+	}
 }
 
 void oems_sorter::put_list_to_gpu(const float* p_list, size_t byte_count)
@@ -99,19 +249,16 @@ void oems_sorter::sort(std::vector<float>& list)
 	assert(list.size() > 4);
 
 	const size_t byte_count = sizeof(float) * list.size();
+	const UINT item_count = UINT(list.size());
 
 	put_list_to_gpu(list.data(), byte_count);
 
-	constexpr UINT uav_count = 1;
-	ID3D11UnorderedAccessView* uav_list[uav_count] = { p_buffer_uav_ };
-	p_ctx_->CSSetUnorderedAccessViews(0, uav_count, uav_list, nullptr);
-
-	perform_oems_base_4_sort(UINT(list.size()));
-	perform_oems_main_sort();
-
-	// clear uav ---
-	uav_list[0] = { nullptr };
-	p_ctx_->CSSetUnorderedAccessViews(0, uav_count, uav_list, nullptr);
+	// sort ---
+	p_ctx_->CSSetUnorderedAccessViews(0, 1, &p_buffer_uav_.ptr, nullptr);
+	perform_oems_base_4_sort(item_count);
+	//perform_oems_main_sort(item_count);
+	ID3D11UnorderedAccessView* uav_list[1] = { nullptr };
+	p_ctx_->CSSetUnorderedAccessViews(0, 1, uav_list, nullptr);
 
 	get_list_from_gpu(list.data(), byte_count);
 }

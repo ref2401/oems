@@ -220,4 +220,27 @@ com_ptr<ID3D11Buffer> make_buffer(ID3D11Device* p_device, UINT byte_count,
 	return buffer;
 }
 
+com_ptr<ID3D11Buffer> make_structured_buffer(ID3D11Device* p_device, 
+	UINT item_count, UINT item_byte_count, 
+	D3D11_USAGE usage, UINT bing_flags, UINT cpu_access_flags)
+{
+	assert(p_device);
+	assert(item_count > 0);
+	assert(item_byte_count > 0);
+
+	D3D11_BUFFER_DESC desc = {};
+	desc.ByteWidth				= item_count * item_byte_count;
+	desc.Usage					= usage;
+	desc.BindFlags				= bing_flags;
+	desc.CPUAccessFlags			= cpu_access_flags;
+	desc.MiscFlags				= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+	desc.StructureByteStride	= item_byte_count;
+
+	com_ptr<ID3D11Buffer> buffer;
+	HRESULT hr = p_device->CreateBuffer(&desc, nullptr, &buffer.ptr);
+	assert(hr == S_OK);
+
+	return buffer;
+}
+
 } // namespace oems
