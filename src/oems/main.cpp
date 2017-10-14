@@ -19,15 +19,13 @@ std::vector<float> generate_test_data(size_t count)
 
 void main()
 {
-	bool keep_console_shown = false;
-
 	try {
 		// init ---
 		oems::dx11_rhi		dx11;
 		oems::oems_sorter	sorter(dx11.p_device(), dx11.p_ctx(), dx11.p_debug());
 
 		// gen data & sort ---
-		std::vector<float> data = generate_test_data(16);
+		std::vector<float> data = generate_test_data(1024 * 2);
 		//sorter.sort(data);
 
 		//dx11.p_swap_chain()->Present(1, 0);
@@ -35,30 +33,12 @@ void main()
 		dx11.p_swap_chain()->Present(1, 0);
 		dx11.p_swap_chain()->Present(1, 0);
 
-		//while (true) {
-		//	bool exit = false;
-		//	MSG msg;
-		//	while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
-		//		if (msg.message == WM_QUIT) {
-		//			exit = true;
-		//			break;
-		//		};
-
-		//		TranslateMessage(&msg);
-		//		DispatchMessageA(&msg);
-		//	}
-		//	if (exit) break;
-		//	sorter.sort(data);
-		//	dx11.p_swap_chain()->Present(1, 0);
-		//}
+		std::cout << "is_sorted: " << std::is_sorted(data.begin(), data.end()) << std::endl;
 	}
 	catch (const std::exception& e) {
-		keep_console_shown = true;
-
 		const std::string msg = oems::make_exception_message(e);
 		std::cout << "----- Exception -----" << std::endl << msg << std::endl;
 	}
 
-	if (keep_console_shown)
-		std::cin.get();
+	std::cin.get();
 }

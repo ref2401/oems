@@ -206,9 +206,7 @@ void oems_sorter::perform_oems_main_sort(UINT item_count)
 	assert(hr == S_OK);
 #endif
 
-	for (UINT i = 0; i < column_count; ++i) {
-		p_ctx_->Dispatch(i, 1, 1);
-	}
+	p_ctx_->Dispatch(1, 1, 1);
 }
 
 void oems_sorter::put_list_to_gpu(const float* p_list, size_t byte_count)
@@ -256,7 +254,7 @@ void oems_sorter::sort(std::vector<float>& list)
 	// sort ---
 	p_ctx_->CSSetUnorderedAccessViews(0, 1, &p_buffer_uav_.ptr, nullptr);
 	perform_oems_base_4_sort(item_count);
-	//perform_oems_main_sort(item_count);
+	perform_oems_main_sort(item_count);
 	ID3D11UnorderedAccessView* uav_list[1] = { nullptr };
 	p_ctx_->CSSetUnorderedAccessViews(0, 1, uav_list, nullptr);
 

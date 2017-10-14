@@ -9,7 +9,6 @@ struct sorting_network_column {
 	uint right_offset;
 };
 
-
 RWBuffer<float>								g_buffer			: register(u0);
 StructuredBuffer<sorting_network_column>	g_network_columns	: register(t0);
 
@@ -38,25 +37,42 @@ void perform_comparisons(uint offset, uint comparison_count, sorting_network_col
 }
 
 [numthreads(c_thread_count, 1, 1)]
-void cs_main(uint3 group_id : SV_GroupID, uint3 group_thread_id : SV_GroupThreadID)
+void cs_main(uint3 gt_id : SV_GroupThreadID)
 {
-	const sorting_network_column column	= g_network_columns[group_id.x];
-	const uint iteration_count = column.block_count * column.comparisons_per_block;
-	const uint iterations_per_thread = max(1, iteration_count / c_thread_count);
-	const uint required_thread_count = ceil(float(iteration_count) / iterations_per_thread);
+	const uint curr_thread_id = gt_id.x;
 
-	const uint curr_thread_id = group_thread_id.x;
-	//g_buffer[curr_thread_id] = required_thread_count;
+	uint column_count;
+	uint byte_count;
+	g_network_columns.GetDimensions(column_count, byte_count);
 
-	if (curr_thread_id >= required_thread_count) return;
+	// moving through each column of the network.
+	// the next column may not be processed until all the threads has complited the previous column.
+	uint index = 0;
+	while (index < column_count) {
+		const sorting_network_column column = g_network_columns[index];
+		const uint iteration_count			= column.block_count * column.comparisons_per_block;
+		const uint iterations_per_thread	= max(1, iteration_count / c_thread_count);
+		const uint required_thread_count	= ceil(float(iteration_count) / iterations_per_thread);
 
-	const uint offset = curr_thread_id * iterations_per_thread;
-	perform_comparisons(offset, iterations_per_thread, column);
+		// sort only if there is enough data for the thread ---
+		if (curr_thread_id < required_thread_count) {
+			// each thread processes only it's own chunk of the current sorting network column.
+			// chunk starts from offset and has iterations_per_thread comparisons.
+			const uint offset = curr_thread_id * iterations_per_thread;
+			perform_comparisons(offset, iterations_per_thread, column);
 
-	if ((curr_thread_id + 1 == c_thread_count) && (required_thread_count > c_thread_count)) {
-		const uint extra_iteration_count = iteration_count - iterations_per_thread * c_thread_count;
+			// sometimes there are a few extra comparisons
+			// the last thread is solely responsible for those
+			if ((curr_thread_id + 1 == c_thread_count) && (required_thread_count > c_thread_count)) {
+				const uint extra_iteration_count = iteration_count - iterations_per_thread * c_thread_count;
 
-		const uint offset = c_thread_count * iterations_per_thread;
-		perform_comparisons(offset, extra_iteration_count, column);
+				const uint offset = c_thread_count * iterations_per_thread;
+				perform_comparisons(offset, extra_iteration_count, column);
+			}
+		}
+
+		++index;
+		GroupMemoryBarrierWithGroupSync();
 	}
+
 }
