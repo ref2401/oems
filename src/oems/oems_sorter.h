@@ -32,10 +32,6 @@ private:
 
 	hlsl_compute						oems_base_4_shader_;
 	hlsl_compute						oems_main_shader_;
-	// elements to sort buffer ---
-	com_ptr<ID3D11Buffer>				p_buffer_;
-	com_ptr<ID3D11UnorderedAccessView>	p_buffer_uav_;
-	com_ptr<ID3D11Buffer>				p_buffer_staging_;
 };
 
 } // namespace oems

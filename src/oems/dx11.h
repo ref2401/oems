@@ -198,8 +198,15 @@ inline bool operator!=(nullptr_t, const com_ptr<T>& com_ptr) noexcept
 }
 
 // Creates a standard buffer resource
-com_ptr<ID3D11Buffer> make_buffer(ID3D11Device* p_device, UINT byte_count,
-	D3D11_USAGE usage, UINT bing_flags, UINT cpu_access_flags = 0);
+com_ptr<ID3D11Buffer> make_buffer(ID3D11Device* p_device, const D3D11_SUBRESOURCE_DATA* p_data,
+	UINT byte_count, D3D11_USAGE usage, UINT bing_flags, UINT cpu_access_flags = 0);
+
+// ditto
+inline com_ptr<ID3D11Buffer> make_buffer(ID3D11Device* p_device, UINT byte_count,
+	D3D11_USAGE usage, UINT bind_flags, UINT cpu_access_flags = 0)
+{
+	return make_buffer(p_device, nullptr, byte_count, usage, bind_flags, cpu_access_flags);
+}
 
 //  Creates a structured buffer resource
 com_ptr<ID3D11Buffer> make_structured_buffer(ID3D11Device* p_device,

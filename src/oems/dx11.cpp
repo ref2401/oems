@@ -17,12 +17,13 @@ void init_dx11_stuff(HWND p_hwnd, ID3D11Device*& p_out_device,
 {
 	assert(p_hwnd);
 
-	constexpr D3D_FEATURE_LEVEL expected_feature_level = D3D_FEATURE_LEVEL_11_0;
+	constexpr D3D_FEATURE_LEVEL expected_feature_level = D3D_FEATURE_LEVEL_11_1;
 	D3D_FEATURE_LEVEL actual_feature_level;
 
 	// create device & context ---
 	HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 
-		D3D11_CREATE_DEVICE_DEBUG, &expected_feature_level, 1, D3D11_SDK_VERSION, 
+		D3D11_CREATE_DEVICE_DEBUG | D3D11_CREATE_DEVICE_DISABLE_GPU_TIMEOUT, 
+		&expected_feature_level, 1, D3D11_SDK_VERSION,
 		&p_out_device,
 		&actual_feature_level,
 		&p_out_ctx);
@@ -201,8 +202,8 @@ hlsl_compute::hlsl_compute(ID3D11Device* p_device, const char* p_source_filename
 
 // ----- funcs -----
 
-com_ptr<ID3D11Buffer> make_buffer(ID3D11Device* p_device, UINT byte_count,
-	D3D11_USAGE usage, UINT bing_flags, UINT cpu_access_flags)
+com_ptr<ID3D11Buffer> make_buffer(ID3D11Device* p_device, const D3D11_SUBRESOURCE_DATA* p_data,
+	UINT byte_count, D3D11_USAGE usage, UINT bing_flags, UINT cpu_access_flags)
 {
 	assert(p_device);
 	assert(byte_count > 0);
@@ -214,7 +215,7 @@ com_ptr<ID3D11Buffer> make_buffer(ID3D11Device* p_device, UINT byte_count,
 	desc.CPUAccessFlags = cpu_access_flags;
 
 	com_ptr<ID3D11Buffer> buffer;
-	const HRESULT hr = p_device->CreateBuffer(&desc, nullptr, &buffer.ptr);
+	const HRESULT hr = p_device->CreateBuffer(&desc, p_data, &buffer.ptr);
 	assert(hr == S_OK);
 
 	return buffer;

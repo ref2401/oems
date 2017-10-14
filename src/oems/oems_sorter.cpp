@@ -6,6 +6,8 @@
 
 namespace {
 
+using namespace oems;
+
 struct sorting_network_column {
 	UINT block_count;
 	UINT comparisons_per_block;
@@ -49,6 +51,55 @@ inline UINT compute_sorting_network_column_count(UINT item_count)
 	assert(res_d == double(res));
 
 	return res;
+}
+
+void copy_data_from_gpu(ID3D11Device* p_device, ID3D11DeviceContext* p_ctx,
+	ID3D11Buffer* p_buffer_src, float* p_dest, size_t byte_count)
+{
+	assert(p_device);
+	assert(p_ctx);
+	assert(p_buffer_src);
+	assert(p_dest);
+	assert(byte_count > 0);
+
+	const UINT bc = UINT(byte_count);
+	assert(size_t(bc) == byte_count);
+
+	// create stagint buffer and fill it with p_buffer_src's contents ---
+	com_ptr<ID3D11Buffer >p_buffer_staging = make_buffer(p_device, bc, 
+		D3D11_USAGE_STAGING, 0, D3D11_CPU_ACCESS_READ);
+
+	p_ctx->CopyResource(p_buffer_staging, p_buffer_src);
+
+	// fill p_dest using the staging buffer ---
+	D3D11_MAPPED_SUBRESOURCE map;
+	HRESULT hr = p_ctx->Map(p_buffer_staging, 0, D3D11_MAP_READ, 0, &map);
+	if (hr != S_OK) {
+		_com_error err(hr);
+		LPCTSTR errMsg = err.ErrorMessage();
+		std::cout << errMsg << std::endl;
+
+		HRESULT rrrr = p_device->GetDeviceRemovedReason();
+		_com_error reason(rrrr);
+		LPCTSTR reason_msg = reason.ErrorMessage();
+		std::cout << reason_msg << std::endl;
+	}
+	assert(hr == S_OK);
+	std::memcpy(p_dest, map.pData, byte_count);
+	p_ctx->Unmap(p_buffer_staging, 0);
+}
+
+com_ptr<ID3D11Buffer> copy_data_to_gpu(ID3D11Device* p_device, const float* p_list, size_t byte_count)
+{
+	assert(p_device);
+	assert(p_list);
+	assert(byte_count > 0);
+
+	const UINT bc = UINT(byte_count);
+	assert(size_t(bc) == byte_count);
+
+	const D3D11_SUBRESOURCE_DATA data = { p_list, 0, 0 };
+	return make_buffer(p_device, bc, D3D11_USAGE_DEFAULT, D3D11_BIND_UNORDERED_ACCESS);
 }
 
 void generate_sorting_network_columns(UINT item_count, sorting_network_column* p_out_column)
@@ -133,31 +184,6 @@ oems_sorter::oems_sorter(ID3D11Device* p_device, ID3D11DeviceContext* p_ctx, ID3
 	oems_main_shader_ = hlsl_compute(p_device, "../../data/oems_main.compute.hlsl");
 }
 
-void oems_sorter::get_list_from_gpu(float* p_list, size_t byte_count)
-{
-	assert(p_list);
-	assert(byte_count > 0);
-
-	// copy from regular buffer to staging buffer ---
-	p_ctx_->CopyResource(p_buffer_staging_, p_buffer_);
-
-	// fill p_list using staging buffer ---
-	D3D11_MAPPED_SUBRESOURCE map;
-	HRESULT hr = p_ctx_->Map(p_buffer_staging_, 0, D3D11_MAP_READ, 0, &map);
-	if (hr != S_OK) {
-		_com_error err(hr);
-		LPCTSTR errMsg = err.ErrorMessage();
-		std::cout << errMsg << std::endl;
-
-		_com_error reason(p_device_->GetDeviceRemovedReason());
-		LPCTSTR reason_msg = reason.ErrorMessage();
-		std::cout << reason_msg << std::endl;
-	}
-	assert(hr == S_OK);
-	std::memcpy(p_list, map.pData, byte_count);
-	p_ctx_->Unmap(p_buffer_staging_, 0);
-}
-
 void oems_sorter::perform_oems_base_4_sort(UINT item_count) 
 {
 	assert(item_count > 0);
@@ -209,39 +235,6 @@ void oems_sorter::perform_oems_main_sort(UINT item_count)
 	p_ctx_->Dispatch(1, 1, 1);
 }
 
-void oems_sorter::put_list_to_gpu(const float* p_list, size_t byte_count)
-{
-	assert(p_list);
-	assert(byte_count > 0);
-
-	p_buffer_uav_.dispose();
-
-	const UINT bc = UINT(byte_count);
-	assert(size_t(bc) == byte_count);
-
-	// resize buffers ---
-	p_buffer_staging_ = make_buffer(p_device_, bc, D3D11_USAGE_STAGING, 0,
-		D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE);
-	p_buffer_ = make_buffer(p_device_, bc, D3D11_USAGE_DEFAULT, D3D11_BIND_UNORDERED_ACCESS);
-	D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
-	uav_desc.Format =				DXGI_FORMAT_R32_FLOAT;
-	uav_desc.ViewDimension =		D3D11_UAV_DIMENSION_BUFFER;
-	uav_desc.Buffer.FirstElement =	0;
-	uav_desc.Buffer.NumElements =	bc / sizeof(float);
-	HRESULT hr = p_device_->CreateUnorderedAccessView(p_buffer_.ptr, &uav_desc, &p_buffer_uav_.ptr);
-	assert(hr == S_OK);
-
-	// fill staging buffer ---
-	D3D11_MAPPED_SUBRESOURCE map;
-	hr = p_ctx_->Map(p_buffer_staging_, 0, D3D11_MAP_WRITE, 0, &map);
-	assert(hr == S_OK);
-	std::memcpy(map.pData, p_list, byte_count);
-	p_ctx_->Unmap(p_buffer_staging_, 0);
-
-	// copy from staging buffer to regular buffer ---
-	p_ctx_->CopyResource(p_buffer_, p_buffer_staging_);
-}
-
 void oems_sorter::sort(std::vector<float>& list)
 {
 	assert(list.size() > 4);
@@ -249,16 +242,28 @@ void oems_sorter::sort(std::vector<float>& list)
 	const size_t byte_count = sizeof(float) * list.size();
 	const UINT item_count = UINT(list.size());
 
-	put_list_to_gpu(list.data(), byte_count);
+	// copy list to the gpu & set uav ---
+	com_ptr<ID3D11Buffer> p_buffer = copy_data_to_gpu(p_device_, list.data(), byte_count);
+	com_ptr<ID3D11UnorderedAccessView> p_buffer_uav;
+	D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
+	uav_desc.Format =				DXGI_FORMAT_R32_FLOAT;
+	uav_desc.ViewDimension =		D3D11_UAV_DIMENSION_BUFFER;
+	uav_desc.Buffer.FirstElement =	0;
+	uav_desc.Buffer.NumElements =	UINT(list.size());
+	HRESULT hr = p_device_->CreateUnorderedAccessView(p_buffer.ptr, &uav_desc, &p_buffer_uav.ptr);
+	assert(hr == S_OK);
+	
+	p_ctx_->CSSetUnorderedAccessViews(0, 1, &p_buffer_uav.ptr, nullptr);
 
 	// sort ---
-	p_ctx_->CSSetUnorderedAccessViews(0, 1, &p_buffer_uav_.ptr, nullptr);
 	perform_oems_base_4_sort(item_count);
 	perform_oems_main_sort(item_count);
+
 	ID3D11UnorderedAccessView* uav_list[1] = { nullptr };
 	p_ctx_->CSSetUnorderedAccessViews(0, 1, uav_list, nullptr);
 
-	get_list_from_gpu(list.data(), byte_count);
+	// copy list from the gpu
+	copy_data_from_gpu(p_device_, p_ctx_, p_buffer, list.data(), byte_count);
 }
 
 } // namespace oems
