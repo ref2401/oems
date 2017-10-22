@@ -1,4 +1,8 @@
-static const uint c_thread_count = 128;
+//	optimal values (at least for my pc)
+//	item_count			thread_count
+//	1024 * 1024			256
+//	2 * 1024 * 1024		512
+static const uint c_thread_count = 512;
 
 struct sorting_network_column {
 	// index of the first element in column
@@ -88,7 +92,7 @@ void process_first_column(uint curr_thread_id, uint item_count, uint v_2power)
 	};
 
 	process_column(curr_thread_id, column);
-	GroupMemoryBarrierWithGroupSync();
+	DeviceMemoryBarrierWithGroupSync();
 }
 
 void process_intermediate_columns(uint curr_thread_id, uint item_count, 
@@ -108,7 +112,7 @@ void process_intermediate_columns(uint curr_thread_id, uint item_count,
 	for (uint ci = 0; ci < column_count; ++ci) {
 
 		process_column(curr_thread_id, column);
-		GroupMemoryBarrierWithGroupSync();
+		DeviceMemoryBarrierWithGroupSync();
 
 		column.first_element_index >>= 1;
 		column.row_stride >>= 1;
@@ -132,7 +136,7 @@ void process_last_column(uint curr_thread_id, uint item_count, uint v_2power)
 	};
 
 	process_column(curr_thread_id, column);
-	GroupMemoryBarrierWithGroupSync();
+	DeviceMemoryBarrierWithGroupSync();
 }
 
 void sort_merge_block_4(uint origin)
@@ -174,8 +178,6 @@ void sort_4(uint curr_thread_id, uint item_count)
 		const uint first = origin + 4 * t;
 		sort_merge_block_4(first);
 	}
-
-	GroupMemoryBarrierWithGroupSync();
 }
 
 [numthreads(c_thread_count, 1, 1)]
@@ -185,6 +187,7 @@ void cs_main(uint3 gt_id : SV_GroupThreadID)
 	const uint item_count = get_item_count();
 
 	sort_4(curr_thread_id, item_count);
+	DeviceMemoryBarrierWithGroupSync();
 
 	uint power = 3;
 	uint v_2power = 8; // == 2 ^ power
