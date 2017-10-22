@@ -18,20 +18,10 @@ public:
 
 private:
 
-	void get_list_from_gpu(float* p_list, size_t byte_count);
-
-	void perform_oems_base_4_sort(UINT item_count);
-
-	void perform_oems_main_sort(UINT item_count);
-
-	void put_list_to_gpu(const float* p_list, size_t byte_count);
-
 	ID3D11Device*			p_device_;
 	ID3D11DeviceContext*	p_ctx_;
 	ID3D11Debug*			p_debug_;
-
-	hlsl_compute						oems_base_4_shader_;
-	hlsl_compute						oems_main_shader_;
+	hlsl_compute			oems_main_shader_;
 };
 
 } // namespace oems
