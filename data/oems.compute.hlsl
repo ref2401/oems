@@ -1,7 +1,3 @@
-//	optimal values (at least for my pc)
-//	item_count			thread_count
-//	1024 * 1024			256
-//	2 * 1024 * 1024		512
 static const uint c_thread_count = 256;
 
 struct sorting_network_column {
