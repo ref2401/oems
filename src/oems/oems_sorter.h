@@ -21,7 +21,7 @@ private:
 	ID3D11Device*			p_device_;
 	ID3D11DeviceContext*	p_ctx_;
 	ID3D11Debug*			p_debug_;
-	hlsl_compute			oems_main_shader_;
+	hlsl_compute			oems_shader_;
 };
 
 } // namespace oems

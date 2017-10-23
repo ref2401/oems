@@ -14,33 +14,6 @@ constexpr char* c_window_class_name = "oems_window_class";
 LRESULT CALLBACK window_proc(HWND p_hwnd, UINT message, WPARAM w_param, LPARAM l_param);
 
 
-void init_dx11_stuff(HWND p_hwnd, ID3D11Device*& p_out_device, 
-	ID3D11DeviceContext*& p_out_ctx, ID3D11Debug*& p_out_debug)
-{
-	assert(p_hwnd);
-
-	constexpr D3D_FEATURE_LEVEL expected_feature_level = D3D_FEATURE_LEVEL_11_1;
-	D3D_FEATURE_LEVEL actual_feature_level;
-
-	// create device & context ---
-	HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 
-		D3D11_CREATE_DEVICE_DEBUG | D3D11_CREATE_DEVICE_DISABLE_GPU_TIMEOUT, 
-		&expected_feature_level, 1, D3D11_SDK_VERSION,
-		&p_out_device,
-		&actual_feature_level,
-		&p_out_ctx);
-
-	THROW_IF_DX_ERROR(hr);
-	ENFORCE(actual_feature_level == expected_feature_level, 
-		"Failed to create a device with feature level: D3D_FEATURE_LEVEL_11_0.");
-
-	// init debug interface ---
-#ifdef OEMS_DEBUG
-	hr = p_out_device->QueryInterface<ID3D11Debug>(&p_out_debug);
-	THROW_IF_DX_ERROR(hr);
-#endif
-}
-
 com_ptr<ID3DBlob> compile_shader(const std::string& source_code, const char* p_source_filename)
 {
 	com_ptr<ID3DBlob> p_bytecode;
@@ -133,35 +106,27 @@ namespace oems {
 dx11_rhi::dx11_rhi()
 {
 	p_hwnd_ = make_window({ 100, 100 }, { 256, 256 });
-	init_dx11_stuff(p_hwnd_, p_device_.ptr, p_ctx_.ptr, p_debug_.ptr);
 
-	ShowWindow(p_hwnd_, SW_SHOW);
-	SetForegroundWindow(p_hwnd_);
-	SetFocus(p_hwnd_);
+	constexpr D3D_FEATURE_LEVEL expected_feature_level = D3D_FEATURE_LEVEL_11_1;
+	D3D_FEATURE_LEVEL actual_feature_level;
 
-	IDXGIFactory* p_factory;
-	HRESULT hr = CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)(&p_factory));
+	// create device & context ---
+	HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
+		D3D11_CREATE_DEVICE_DEBUG | D3D11_CREATE_DEVICE_DISABLE_GPU_TIMEOUT,
+		&expected_feature_level, 1, D3D11_SDK_VERSION,
+		&p_device_.ptr,
+		&actual_feature_level,
+		&p_ctx_.ptr);
+
 	THROW_IF_DX_ERROR(hr);
+	ENFORCE(actual_feature_level == expected_feature_level,
+		"Failed to create a device with feature level: D3D_FEATURE_LEVEL_11_0.");
 
-	DXGI_SWAP_CHAIN_DESC swap_chain_desc = {};
-	swap_chain_desc.BufferCount = 2;
-	swap_chain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	swap_chain_desc.BufferDesc.Width = 256;
-	swap_chain_desc.BufferDesc.Height = 256;
-	swap_chain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	swap_chain_desc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-	swap_chain_desc.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
-	swap_chain_desc.BufferDesc.RefreshRate.Numerator = 60;
-	swap_chain_desc.BufferDesc.RefreshRate.Denominator = 1;
-	swap_chain_desc.SampleDesc.Count = 1;
-	swap_chain_desc.SampleDesc.Quality = 0;
-	swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-	swap_chain_desc.Windowed = true;
-	swap_chain_desc.OutputWindow = p_hwnd_;
-	hr = p_factory->CreateSwapChain(p_device_, &swap_chain_desc, &p_swap_chain_.ptr);
+	// init debug interface ---
+#ifdef OEMS_DEBUG
+	hr = p_device_->QueryInterface<ID3D11Debug>(&p_debug_.ptr);
 	THROW_IF_DX_ERROR(hr);
-
-	p_factory->Release();
+#endif
 }
 
 dx11_rhi::~dx11_rhi() noexcept
@@ -246,7 +211,7 @@ com_ptr<ID3D11Buffer> make_structured_buffer(ID3D11Device* p_device,
 	return buffer;
 }
 
-void throw_if_error(HRESULT hr, ID3D11Device* p_device, 
+void throw_if_dx_error(HRESULT hr, ID3D11Device* p_device, 
 	const char* p_filename, uint64_t line_number)
 {
 	if (hr == S_OK) return;

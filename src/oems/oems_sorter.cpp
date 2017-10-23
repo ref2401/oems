@@ -60,7 +60,7 @@ oems_sorter::oems_sorter(ID3D11Device* p_device, ID3D11DeviceContext* p_ctx, ID3
 	assert(p_ctx);
 	assert(p_debug); // p_debug == nullptr in Release mode.
 
-	oems_main_shader_ = hlsl_compute(p_device, "../../data/oems_main.compute.hlsl");
+	oems_shader_ = hlsl_compute(p_device, "../../data/oems.compute.hlsl");
 }
 
 void oems_sorter::sort(std::vector<float>& list)
@@ -82,7 +82,7 @@ void oems_sorter::sort(std::vector<float>& list)
 	THROW_IF_DX_ERROR(hr);
 
 	// (sort) setup compute pipeline & dispatch work ---
-	p_ctx_->CSSetShader(oems_main_shader_.p_shader, nullptr, 0);
+	p_ctx_->CSSetShader(oems_shader_.p_shader, nullptr, 0);
 	p_ctx_->CSSetUnorderedAccessViews(0, 1, &p_buffer_uav.ptr, nullptr);
 
 #ifdef OEMS_DEBUG

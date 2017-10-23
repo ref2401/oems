@@ -15,4 +15,4 @@ pass, rows, columns, inner_pass.
 first & third passes have 1 column, the second pass has varying number of columns
 comparison indices inside a column
 
-to achieve best performance one should poke compute shader's c_thread_count constant 
+To achieve best performance for the specified number of elements one should poke compute shader's c_thread_count constant

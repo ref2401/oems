@@ -26,9 +26,8 @@ void main()
 
 		// gen data & sort ---
 		std::vector<float> data = generate_test_data(1024 * 1024);
-		dx11.p_swap_chain()->Present(1, 0);
+		std::cout << "item_count: " << data.size() << std::endl;
 		sorter.sort(data);
-		dx11.p_swap_chain()->Present(1, 0);
 
 		std::cout << "is_sorted: " << std::is_sorted(data.begin(), data.end()) << std::endl;
 	}

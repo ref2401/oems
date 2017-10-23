@@ -9,9 +9,9 @@
 #include <windows.h>
 
 
-#define THROW_IF_DX_ERROR(hr) oems::throw_if_error(hr, nullptr, __FILE__, __LINE__);
+#define THROW_IF_DX_ERROR(hr) oems::throw_if_dx_error(hr, nullptr, __FILE__, __LINE__);
 
-#define THROW_IF_DX_DEVICE_ERROR(hr, p_device) oems::throw_if_error(hr, p_device, __FILE__, __LINE__);
+#define THROW_IF_DX_DEVICE_ERROR(hr, p_device) oems::throw_if_dx_error(hr, p_device, __FILE__, __LINE__);
 
 namespace oems {
 
@@ -136,18 +136,12 @@ public:
 		return p_debug_;
 	}
 
-	IDXGISwapChain* p_swap_chain() noexcept
-	{
-		return p_swap_chain_;
-	}
-
 private:
 
 	HWND							p_hwnd_;
 	com_ptr<ID3D11Device>			p_device_;
 	com_ptr<ID3D11DeviceContext>	p_ctx_;
 	com_ptr<ID3D11Debug>			p_debug_;
-	com_ptr<IDXGISwapChain>			p_swap_chain_;
 };
 
 struct hlsl_compute final {
@@ -217,7 +211,7 @@ com_ptr<ID3D11Buffer> make_structured_buffer(ID3D11Device* p_device,
 	UINT item_count, UINT item_byte_count,
 	D3D11_USAGE usage, UINT bing_flags, UINT cpu_access_flags = 0);
 
-void throw_if_error(HRESULT hr, ID3D11Device* p_device, 
+void throw_if_dx_error(HRESULT hr, ID3D11Device* p_device, 
 	const char* p_filename, uint64_t line_number);
 
 } // namespace oems

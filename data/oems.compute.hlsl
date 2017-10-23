@@ -2,7 +2,7 @@
 //	item_count			thread_count
 //	1024 * 1024			256
 //	2 * 1024 * 1024		512
-static const uint c_thread_count = 512;
+static const uint c_thread_count = 256;
 
 struct sorting_network_column {
 	// index of the first element in column
@@ -23,23 +23,22 @@ struct sorting_network_column {
 RWBuffer<float> g_buffer : register(u0);
 
 
-inline void compare_and_swap(inout float l, inout float r)
+inline void compare_and_swap(uint l, uint r)
 {
-	if (l <= r) return;
+	const float x = g_buffer[l];
+	const float y = g_buffer[r];
+	
+	if (x <= y) return;
 
-	const float tmp = l;
-	l = r;
-	r = tmp;
-}
+	g_buffer[l] = y;
+	g_buffer[r] = x;
 
-inline void compare_and_swap_buffer(uint l, uint r)
-{
-	const float vl = g_buffer[l];
-	const float vr = g_buffer[r];
-	if (vl <= vr) return;
-
-	g_buffer[l] = vr;
-	g_buffer[r] = vl;
+	// the following approach has worse performance
+	//const float a = step(x, y);
+	//const float b = 1 - a;
+	//
+	//g_buffer[l] = a * x + b * y;
+	//g_buffer[r] = b * x + a * y;
 }
 
 inline uint get_item_count()
@@ -74,7 +73,7 @@ void process_column(uint curr_thread_id, sorting_network_column column)
 
 		const uint l = start_index + column.left_factor * (ci % column.comparisons_per_row);
 		const uint r = l + column.right_offset;
-		compare_and_swap_buffer(l, r);
+		compare_and_swap(l, r);
 	}
 }
 
@@ -139,32 +138,6 @@ void process_last_column(uint curr_thread_id, uint item_count, uint v_2power)
 	DeviceMemoryBarrierWithGroupSync();
 }
 
-void sort_merge_block_4(uint origin)
-{
-	// read 4 sequential values ---
-	const uint	idx0 = origin;
-	const uint	idx1 = idx0 + 1;
-	const uint	idx2 = idx1 + 1;
-	const uint	idx3 = idx2 + 1;
-	float v0 = g_buffer[idx0];
-	float v1 = g_buffer[idx1];
-	float v2 = g_buffer[idx2];
-	float v3 = g_buffer[idx3];
-
-	// compare and swap: (0, 1) (2, 3) (0, 2) (1, 3) (1, 2) ---
-	compare_and_swap(v0, v1);
-	compare_and_swap(v2, v3);
-	compare_and_swap(v0, v2);
-	compare_and_swap(v1, v3);
-	compare_and_swap(v1, v2);
-
-	// flush values back ---
-	g_buffer[idx0] = v0;
-	g_buffer[idx1] = v1;
-	g_buffer[idx2] = v2;
-	g_buffer[idx3] = v3;
-}
-
 // Partitions g_buffer as sequence of 4 elements tuples and sorts each tuple separatly.
 void sort_4(uint curr_thread_id, uint item_count)
 {
@@ -175,8 +148,17 @@ void sort_4(uint curr_thread_id, uint item_count)
 	const uint origin = 4 * curr_thread_id * tuples_per_thread;
 
 	for (uint t = 0; t < tuples_per_thread; ++t) {
-		const uint first = origin + 4 * t;
-		sort_merge_block_4(first);
+		const uint idx0 = origin + 4 * t;
+		const uint idx1 = idx0 + 1;
+		const uint idx2 = idx1 + 1;
+		const uint idx3 = idx2 + 1;
+
+		// compare and swap: (0, 1) (2, 3) (0, 2) (1, 3) (1, 2) ---
+		compare_and_swap(idx0, idx1);
+		compare_and_swap(idx2, idx3);
+		compare_and_swap(idx0, idx2);
+		compare_and_swap(idx1, idx3);
+		compare_and_swap(idx1, idx2);
 	}
 }
 
