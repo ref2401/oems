@@ -1,8 +1,7 @@
 #include "oems/oems_sorter.h"
 
 #include <cassert>
-#include <iostream>
-#include <comdef.h>
+
 
 namespace {
 
@@ -29,17 +28,7 @@ void copy_data_from_gpu(ID3D11Device* p_device, ID3D11DeviceContext* p_ctx,
 	// fill p_dest using the staging buffer ---
 	D3D11_MAPPED_SUBRESOURCE map;
 	HRESULT hr = p_ctx->Map(p_buffer_staging, 0, D3D11_MAP_READ, 0, &map);
-	if (hr != S_OK) {
-		_com_error err(hr);
-		LPCTSTR errMsg = err.ErrorMessage();
-		std::cout << errMsg << std::endl;
-
-		HRESULT rrrr = p_device->GetDeviceRemovedReason();
-		_com_error reason(rrrr);
-		LPCTSTR reason_msg = reason.ErrorMessage();
-		std::cout << reason_msg << std::endl;
-	}
-	assert(hr == S_OK);
+	THROW_IF_DX_DEVICE_ERROR(hr, p_device);
 	std::memcpy(p_dest, map.pData, byte_count);
 	p_ctx->Unmap(p_buffer_staging, 0);
 }
@@ -90,7 +79,7 @@ void oems_sorter::sort(std::vector<float>& list)
 	uav_desc.Buffer.FirstElement	= 0;
 	uav_desc.Buffer.NumElements		= item_count;
 	HRESULT hr = p_device_->CreateUnorderedAccessView(p_buffer.ptr, &uav_desc, &p_buffer_uav.ptr);
-	assert(hr == S_OK);
+	THROW_IF_DX_ERROR(hr);
 
 	// (sort) setup compute pipeline & dispatch work ---
 	p_ctx_->CSSetShader(oems_main_shader_.p_shader, nullptr, 0);
@@ -98,7 +87,7 @@ void oems_sorter::sort(std::vector<float>& list)
 
 #ifdef OEMS_DEBUG
 	hr = p_debug_->ValidateContextForDispatch(p_ctx_);
-	assert(hr == S_OK);
+	THROW_IF_DX_ERROR(hr);
 #endif
 
 	p_ctx_->Dispatch(1, 1, 1);

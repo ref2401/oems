@@ -34,8 +34,8 @@ inline void compare_and_swap(inout float l, inout float r)
 
 inline void compare_and_swap_buffer(uint l, uint r)
 {
-	float vl = g_buffer[l];
-	float vr = g_buffer[r];
+	const float vl = g_buffer[l];
+	const float vr = g_buffer[r];
 	if (vl <= vr) return;
 
 	g_buffer[l] = vr;

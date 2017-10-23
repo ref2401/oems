@@ -1,6 +1,8 @@
 #include "oems/dx11.h"
 
 #include <cassert>
+#include <sstream>
+#include <comdef.h>
 
 
 namespace {
@@ -28,14 +30,14 @@ void init_dx11_stuff(HWND p_hwnd, ID3D11Device*& p_out_device,
 		&actual_feature_level,
 		&p_out_ctx);
 
-	assert(hr == S_OK);
+	THROW_IF_DX_ERROR(hr);
 	ENFORCE(actual_feature_level == expected_feature_level, 
 		"Failed to create a device with feature level: D3D_FEATURE_LEVEL_11_0.");
 
 	// init debug interface ---
 #ifdef OEMS_DEBUG
 	hr = p_out_device->QueryInterface<ID3D11Debug>(&p_out_debug);
-	assert(hr == S_OK);
+	THROW_IF_DX_ERROR(hr);
 #endif
 }
 
@@ -139,7 +141,7 @@ dx11_rhi::dx11_rhi()
 
 	IDXGIFactory* p_factory;
 	HRESULT hr = CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)(&p_factory));
-	assert(hr == S_OK);
+	THROW_IF_DX_ERROR(hr);
 
 	DXGI_SWAP_CHAIN_DESC swap_chain_desc = {};
 	swap_chain_desc.BufferCount = 2;
@@ -157,7 +159,7 @@ dx11_rhi::dx11_rhi()
 	swap_chain_desc.Windowed = true;
 	swap_chain_desc.OutputWindow = p_hwnd_;
 	hr = p_factory->CreateSwapChain(p_device_, &swap_chain_desc, &p_swap_chain_.ptr);
-	assert(hr == S_OK);
+	THROW_IF_DX_ERROR(hr);
 
 	p_factory->Release();
 }
@@ -216,7 +218,7 @@ com_ptr<ID3D11Buffer> make_buffer(ID3D11Device* p_device, const D3D11_SUBRESOURC
 
 	com_ptr<ID3D11Buffer> buffer;
 	const HRESULT hr = p_device->CreateBuffer(&desc, p_data, &buffer.ptr);
-	assert(hr == S_OK);
+	THROW_IF_DX_ERROR(hr);
 
 	return buffer;
 }
@@ -239,9 +241,28 @@ com_ptr<ID3D11Buffer> make_structured_buffer(ID3D11Device* p_device,
 
 	com_ptr<ID3D11Buffer> buffer;
 	HRESULT hr = p_device->CreateBuffer(&desc, nullptr, &buffer.ptr);
-	assert(hr == S_OK);
+	THROW_IF_DX_ERROR(hr);
 
 	return buffer;
+}
+
+void throw_if_error(HRESULT hr, ID3D11Device* p_device, 
+	const char* p_filename, uint64_t line_number)
+{
+	if (hr == S_OK) return;
+
+	const _com_error ce(hr);
+	std::stringstream stream;
+
+	stream << p_filename << '(' << line_number << "): HRESULT 0x" << std::hex << hr << std::endl 
+		<< '\t' << ce.ErrorMessage() << std::endl;
+
+	if (p_device && (hr == DXGI_ERROR_DEVICE_REMOVED)) {
+		_com_error reason(p_device->GetDeviceRemovedReason());
+		stream << '\t' << reason.ErrorMessage() << std::endl;
+	}
+
+	throw std::runtime_error(stream.str());
 }
 
 } // namespace oems
